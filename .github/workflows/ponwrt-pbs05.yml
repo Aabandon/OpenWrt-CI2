@@ -1,0 +1,46 @@
+#CI项目名
+name: ponwrt-pbs05
+
+on:
+  #自动编译：每周日早上2点（需要时取消注释）
+  #schedule:
+  #  - cron: 0 18 * * Sun
+  #手动编译
+  workflow_dispatch:
+
+#同一设备同时只跑一个构建，避免并发写同一份工具链缓存
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+#CI权限：发布 Release、清理旧运行记录都需要写权限
+permissions:
+  contents: write
+  actions: write
+
+#CI任务
+jobs:
+  openwrt_config:
+    #调用公用编译核心 OpenWrt-CORE.yml
+    uses: ./.github/workflows/OpenWrt-CORE.yml
+    with:
+      #编译平台（对应 Config/ponwrt-pbs05.txt）
+      OpenWrt_TARGET: ponwrt-pbs05
+      #默认主题
+      OpenWrt_THEME: argon
+      #默认主机名
+      OpenWrt_NAME: ImmortalWrt
+      #默认密码，仅作展示，请勿乱改
+      OpenWrt_PW: 无
+      #默认地址
+      OpenWrt_IP: 192.168.1.1
+      #默认源码
+      OpenWrt_URL: https://github.com/pbs05/ponwrt.git
+      #默认分支
+      OpenWrt_BRANCH: master
+
+      # ---------- 以下为选填，不写就用核心里的默认值 ----------
+      #自定义配置文件（相对仓库根目录），默认 Config/ponwrt-pbs05.txt
+      #OpenWrt_CONFIG: Config/ponwrt-pbs05.txt
+      #是否启用工具链缓存：'false' 可强制重新编译工具链（默认 'true'）
+      #OpenWrt_CACHE: 'true'

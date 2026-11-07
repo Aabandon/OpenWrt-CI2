@@ -1,0 +1,33 @@
+#CI项目名
+name: Delete-tag-and-release
+
+on:
+  #自动执行：每周日早上1点（需要时取消注释）
+  #schedule:
+  #  - cron: 0 17 * * Sun
+  #手动编译
+  workflow_dispatch:
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+#CI权限
+permissions:
+  contents: write
+  actions: write
+
+#CI任务
+jobs:
+  del_core:
+    runs-on: ubuntu-24.04
+    steps:
+      #只清理固件 Release；toolchain-cache 必须保留
+      - name: Delete releases and workflows runs
+        uses: ophub/delete-releases-workflows@main
+        with:
+          delete_releases: true
+          releases_keep_latest: 0
+          delete_tags: true
+          delete_workflows: true
+          workflows_keep_day: 0
+          gh_token: ${{ secrets.GITHUB_TOKEN }}

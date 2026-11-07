@@ -1,0 +1,82 @@
+#AN7581
+# ============================================================
+# ponwrt-pbs05 —— pbs05/ponwrt（Airoha AN7581 PON 光猫）
+#
+# 一台设备只需要这一个配置文件，分三部分：
+#   1. 首行 # 之后   = 发布说明里的“设备”字段
+#   2. #!DEFCONFIG=  = 先加载源码自带的完整配置
+#   3. 其余内容      = 本平台的额外配置，追加到 .config 末尾
+#                      （后写的覆盖先写的）
+#
+# 换平台只改这里，例如 AN7583：
+#   #!DEFCONFIG=configs/an7583.config
+# ============================================================
+#!DEFCONFIG=configs/an7581.config
+
+# ---------------- 机型：只编译这 4 款 ----------------
+# 源码 configs/an7581.config 里默认把该子平台所有机型都设成 =y，
+# 本文件整体追加在它后面，所以用 Kconfig 的“不选”语法逐个关掉：
+#   CONFIG_XXX=n  （等价于 "# CONFIG_XXX is not set"，后写覆盖先写）
+# 保留：fiberhome_hg5585f-ct / nokia_xg-040g-md-ubi / unionman_ung00a / znxt_zn504xg-d
+CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5382a=n
+CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5585f-ct-usb-sfp=n
+CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5585f-cu=n
+CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5585f-cu-usb-sfp=n
+CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_gemtek_xg2010g=n
+CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_nokia_xg-040g-md-ubi-usb-sfp=n
+CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_nokia_xg-040g-tf-ubi=n
+CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_znxt_zn515xg-d=n
+
+# ---------------- 关掉源码配置里残留的 passwall 组件 ----------------
+# 源码 configs/an7581.config 里 luci-app-passwall 本体是关闭的，
+# 但这些 INCLUDE_* 还是 =y，它们是独立的子包，会真的参与编译：
+#   INCLUDE_Shadowsocks_Rust_*  → 拉起 rust/host（编译极慢、占十几 G，上次爆盘主因）
+#   INCLUDE_Xray / SingBox / V2ray_* / Haproxy → 额外编一堆代理内核
+# 真要用 passwall 时：删掉下面几行，并加上 CONFIG_PACKAGE_luci-app-passwall=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Haproxy=n
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Shadowsocks_Rust_Client=n
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Shadowsocks_Rust_Server=n
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Simple_Obfs=n
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_SingBox=n
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Geoview=n
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin=n
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=n
+
+# ---------------- 主题 ----------------
+CONFIG_PACKAGE_luci-app-argon-config=y
+CONFIG_PACKAGE_luci-theme-argon=y
+CONFIG_PACKAGE_luci-theme-design=y
+CONFIG_PACKAGE_luci-app-design-config=y
+CONFIG_PACKAGE_luci-theme-aurora=y
+CONFIG_PACKAGE_luci-theme-aurora-config=y
+
+# ---------------- 常用插件 ----------------
+CONFIG_PACKAGE_coremark=y
+CONFIG_PACKAGE_kmod-mtd-rw=y
+CONFIG_PACKAGE_luci-app-upnp=y
+CONFIG_PACKAGE_luci-app-diskman=y
+CONFIG_PACKAGE_luci-app-fileassistant=y
+CONFIG_PACKAGE_luci-app-vlmcsd=y
+CONFIG_PACKAGE_luci-app-ttyd=y
+CONFIG_PACKAGE_luci-app-ramfree=y
+CONFIG_PACKAGE_luci-app-ddns-go=y
+CONFIG_PACKAGE_luci-app-lucky=y
+CONFIG_PACKAGE_luci-app-webadmin=y
+CONFIG_PACKAGE_luci-app-wol=y
+CONFIG_PACKAGE_python3=y
+CONFIG_PACKAGE_python3-requests=y
+CONFIG_PACKAGE_curl=y
+CONFIG_PACKAGE_ca-bundle=y
+CONFIG_PACKAGE_gzip=y
+CONFIG_PACKAGE_luci-app-samba4=y
+CONFIG_PACKAGE_luci-app-rtp2httpd=y
+CONFIG_PACKAGE_luci-app-uugamebooster=y
+CONFIG_PACKAGE_luci-app-gecoosac=y
+
+CONFIG_PACKAGE_luci-app-openclash=y
+# ---------------- airoha相关插件 ----------------
+CONFIG_PACKAGE_luci-app-airoha-fancontrol=y
+CONFIG_PACKAGE_luci-app-airoha-npu=y
+CONFIG_PACKAGE_luci-app-natmode=y
+CONFIG_PACKAGE_luci-app-pon-status=y
+CONFIG_PACKAGE_luci-app-iptv=y

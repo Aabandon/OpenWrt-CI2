@@ -1,0 +1,15 @@
+# .gitattributes —— 强制 LF，避免 Windows 下编辑后 shell 脚本/工作流带 CRLF 导致 Actions 报错
+* text=auto eol=lf
+
+*.sh    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.txt   text eol=lf
+*.md    text eol=lf
+*.config text eol=lf
+
+# 二进制/压缩文件不做换行转换
+*.tzst  binary
+*.gz    binary
+*.bin   binary
+*.img   binary
