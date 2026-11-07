@@ -1,0 +1,77 @@
+#!/bin/sh
+
+. /etc/openwrt_release
+
+IEEE_PATH="/sys/class/ieee80211"
+THERMAL_PATH="/sys/class/thermal"
+
+case "$DISTRIB_TARGET" in
+airoha/*)
+	# WiFi：mt76 系 hwmon 可能位于 phy*/hwmon* 或 phy*/device/hwmon/hwmon*，两种路径都采集；
+	# 采到则覆盖上面通用分支的结果（两种 glob 互斥，不会重复计数）
+	# 参卡自https://github.com/qwe-qaq/Actions-OpenWrt-AN758X
+	for _f in "$IEEE_PATH"/phy*/hwmon*/temp1_input "$IEEE_PATH"/phy*/device/hwmon/hwmon*/temp1_input; do
+		[ -r "$_f" ] || continue
+		_t="$(awk '{printf("%.1f°C", $0 / 1000)}' "$_f" 2>"/dev/null")"
+		[ -n "$_t" ] && _aw="${_aw:+$_aw }$_t"
+	done
+	[ -n "$_aw" ] && wifi_temp="$_aw"
+
+	# PON(光模块)温度：优先 ponctl status --json + jsonfilter（uci 可指定设备），否则回落文本解析
+	ponctl="$(command -v ponctl)"
+	[ -n "$ponctl" ] || { [ -x "/usr/sbin/ponctl" ] && ponctl="/usr/sbin/ponctl"; }
+	if [ -n "$ponctl" ]; then
+		_dev="$(uci -q get pon.@xpon[0].device 2>"/dev/null")"
+		_arg=""
+		[ -n "$_dev" ] && _arg="--device $_dev"
+		_json="$("$ponctl" $_arg status --json 2>"/dev/null")"
+		if [ -n "$_json" ] && command -v jsonfilter >/dev/null 2>&1; then
+			pon_temp="$(printf '%s' "$_json" | jsonfilter -q -e '@.frontend.temperature_celsius' 2>"/dev/null" | awk 'NF {printf("%.1f°C", $1)}')"
+		else
+			pon_temp="$("$ponctl" $_arg status 2>"/dev/null" | awk -F ': *' '/temperature_celsius/ {printf("%.1f°C", $2); exit}')"
+		fi
+	fi
+	;;
+esac
+
+case "$DISTRIB_TARGET" in
+ipq40xx/*|ipq806x/*)
+	wifi_temp="$(awk '{printf("%.1f°C ", $0 / 1000)}' "$IEEE_PATH"/phy*/device/hwmon/hwmon*/temp1_input 2>"/dev/null" | awk '$1=$1')"
+	;;
+mediatek/mt7622)
+	wifi_temp="$(awk '{printf("%.1f°C ", $0 / 1000)}' "$IEEE_PATH"/wl*/hwmon*/temp1_input 2>"/dev/null" | awk '$1=$1')"
+	;;
+*)
+	wifi_temp="$(awk '{printf("%.1f°C ", $0 / 1000)}' "$IEEE_PATH"/phy*/hwmon*/temp1_input 2>"/dev/null" | awk '$1=$1')"
+	;;
+esac
+
+case "$DISTRIB_TARGET" in
+ipq40xx/*)
+	if [ -e "$IEEE_PATH/phy0/hwmon0/temp1_input" ]; then
+		mt76_temp="$(awk -F ': ' '{print $2}' "$IEEE_PATH/phy0/hwmon0/temp1_input" 2>"/dev/null")°C"
+	fi
+	[ -z "$mt76_temp" ] || wifi_temp="${wifi_temp:+$wifi_temp }$mt76_temp"
+	;;
+*)
+	cpu_temp="$(awk '{printf("%.1f°C", $0 / 1000)}' "$THERMAL_PATH/thermal_zone0/temp" 2>"/dev/null")"
+	;;
+esac
+
+if [ -n "$cpu_temp" ] && [ -n "$pon_temp" ] && [ -n "$wifi_temp" ]; then
+	echo -n "CPU: $cpu_temp, PON: $pon_temp, WiFi: $wifi_temp"
+elif [ -n "$cpu_temp" ] && [ -n "$pon_temp" ] && [ -z "$wifi_temp" ]; then
+	echo -n "CPU: $cpu_temp, PON: $pon_temp"
+elif [ -z "$cpu_temp" ] && [ -n "$pon_temp" ] && [ -n "$wifi_temp" ]; then
+	echo -n "PON: $pon_temp, WiFi: $wifi_temp"
+elif [ -z "$cpu_temp" ] && [ -n "$pon_temp" ] && [ -z "$wifi_temp" ]; then
+	echo -n "PON: $pon_temp"
+elif [ -n "$cpu_temp" ] && [ -z "$pon_temp" ] && [ -z "$wifi_temp" ]; then
+	echo -n "CPU: $cpu_temp"
+elif [ -z "$cpu_temp" ] && [ -z "$pon_temp" ] && [ -n "$wifi_temp" ]; then
+	echo -n "WiFi: $wifi_temp"
+elif [ -n "$cpu_temp" ] && [ -z "$pon_temp" ] && [ -n "$wifi_temp" ]; then
+	echo -n "CPU: $cpu_temp, WiFi: $wifi_temp"
+else
+	echo -n "No temperature info"
+fi
