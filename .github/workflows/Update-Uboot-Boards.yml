@@ -1,0 +1,121 @@
+name: Update-Uboot-Boards
+
+# 定时同步上游机型名单；也可手动触发
+on:
+  schedule:
+    - cron: '0 2 * * 3'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      # =======================================================================
+      # 1. 拉取 CI 仓库
+      # =======================================================================
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # =======================================================================
+      # 2. 拉取上游机型并写入名单
+      #    AN758X 读 build-an758x.sh 的 case 分支，RTL 读 tools/release/boards/*.json
+      # =======================================================================
+      - name: Fetch Upstream Boards & Update Lists
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/pbs05/uboot-an758x/main/scripts/build-an758x.sh -o /tmp/an758x-build.sh
+          curl -fsSL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/lyq1996/rtl9617c-uboot/contents/tools/release/boards?ref=main" -o /tmp/rtl-boards.json
+          python3 - <<'PY'
+          import json
+          import re
+
+          an_sh = open('/tmp/an758x-build.sh', encoding='utf-8').read()
+          # 从 case 分支取机型：上游新增机型必须加 case，比 usage 行可靠
+          an = []
+          in_case = False
+          for line in an_sh.splitlines():
+              s = line.strip()
+              if s == 'case "$board" in':
+                  in_case = True
+                  continue
+              if in_case:
+                  if s == 'esac':
+                      break
+                  if s.endswith(')') and not s.startswith('*'):
+                      name = s[:-1]
+                      if name and all(c.isalnum() or c in '-_' for c in name):
+                          an.append(name)
+          if not an:  # 回退：上游若改了 case 结构，读 usage 行
+              marker = 'usage: build-an758x.sh <'
+              if marker in an_sh:
+                  start = an_sh.index(marker) + len(marker)
+                  an = an_sh[start:an_sh.index('>', start)].split('|')
+          an = sorted(set(an))
+
+          rtl = json.load(open('/tmp/rtl-boards.json', encoding='utf-8'))
+          rtl_boards = sorted({x['name'][:-5] for x in rtl if x['name'].endswith('.json')})
+
+          for boards in (an, rtl_boards):
+              if not boards or any(not re.fullmatch('[a-z0-9][a-z0-9._-]*', b) for b in boards):
+                  raise SystemExit('::error::上游机型名单异常，放弃更新')
+
+          files = (
+              ('Config/uboot-an758x-boards.txt',
+               '# 自动生成：Update-Uboot-Boards.yml（来源 pbs05/uboot-an758x 的 build-an758x.sh）', an),
+              ('Config/uboot-rtl9617c-boards.txt',
+               '# 自动生成：Update-Uboot-Boards.yml（来源 lyq1996/rtl9617c-uboot 的 tools/release/boards/）', rtl_boards),
+          )
+          changes = []
+          for path, header, boards in files:
+              try:
+                  old = open(path, encoding='utf-8').read().splitlines()
+                  old_boards = {l.strip() for l in old if l.strip() and not l.lstrip().startswith('#')}
+              except FileNotFoundError:
+                  old_boards = set()
+              added = sorted(set(boards) - old_boards)
+              removed = sorted(old_boards - set(boards))
+              with open(path, 'w', encoding='utf-8', newline='\n') as f:
+                  f.write(header + '\n' + '\n'.join(boards) + '\n')
+              print(f'{path}: {len(boards)} boards')
+              if added or removed:
+                  label = path.split('/')[-1].replace('-boards.txt', '')
+                  parts = []
+                  if added:
+                      parts.append('+' + ','.join(added))
+                  if removed:
+                      parts.append('-' + ','.join(removed))
+                  changes.append(label + ': ' + ' '.join(parts))
+          with open('/tmp/boards-change.txt', 'w', encoding='utf-8') as f:
+              f.write('\n'.join(changes))
+          PY
+
+      # =======================================================================
+      # 3. 提交变更（有差异才 commit，信息用英文）
+      # =======================================================================
+      - name: Commit Changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          paths='Config/uboot-an758x-boards.txt Config/uboot-rtl9617c-boards.txt'
+          if git diff --quiet -- $paths; then
+            echo 'no board list changes'
+            exit 0
+          fi
+          git diff -- $paths
+          git add $paths
+          msg='chore(uboot): sync board lists with upstream'
+          if [ -s /tmp/boards-change.txt ]; then
+            git commit -m "$msg" -m "$(cat /tmp/boards-change.txt)"
+          else
+            git commit -m "$msg"
+          fi
+          git pull --rebase -q
+          git push

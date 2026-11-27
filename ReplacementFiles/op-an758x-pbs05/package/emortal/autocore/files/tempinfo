@@ -1,0 +1,61 @@
+#!/bin/sh
+
+. /etc/openwrt_release
+
+IEEE_PATH="/sys/class/ieee80211"
+THERMAL_PATH="/sys/class/thermal"
+
+# 部分代码参考自https://github.com/qwe-qaq/Actions-OpenWrt-AN758X
+case "$DISTRIB_TARGET" in
+airoha/*)
+	wifi_temp="$(awk '{printf("%.1f°C ", $0 / 1000)}' "$IEEE_PATH"/phy*/hwmon*/temp1_input 2>"/dev/null" | awk '$1=$1')"
+	_airoha_wifi="$(awk '{printf("%.1f°C ", $0 / 1000)}' "$IEEE_PATH"/phy*/device/hwmon/hwmon*/temp1_input 2>"/dev/null" | awk '$1=$1')"
+	[ -z "$_airoha_wifi" ] || wifi_temp="${wifi_temp:+$wifi_temp }$_airoha_wifi"
+	;;
+ipq40xx/*|ipq806x/*)
+	wifi_temp="$(awk '{printf("%.1f°C ", $0 / 1000)}' "$IEEE_PATH"/phy*/device/hwmon/hwmon*/temp1_input 2>"/dev/null" | awk '$1=$1')"
+	;;
+mediatek/mt7622)
+	wifi_temp="$(awk '{printf("%.1f°C ", $0 / 1000)}' "$IEEE_PATH"/wl*/hwmon*/temp1_input 2>"/dev/null" | awk '$1=$1')"
+	;;
+*)
+	wifi_temp="$(awk '{printf("%.1f°C ", $0 / 1000)}' "$IEEE_PATH"/phy*/hwmon*/temp1_input 2>"/dev/null" | awk '$1=$1')"
+	;;
+esac
+
+case "$DISTRIB_TARGET" in
+ipq40xx/*)
+	if [ -e "$IEEE_PATH/phy0/hwmon0/temp1_input" ]; then
+		mt76_temp="$(awk -F ': ' '{print $2}' "$IEEE_PATH/phy0/hwmon0/temp1_input" 2>"/dev/null")°C"
+	fi
+	[ -z "$mt76_temp" ] || wifi_temp="${wifi_temp:+$wifi_temp }$mt76_temp"
+	;;
+*)
+	cpu_temp="$(awk '{printf("%.1f°C", $0 / 1000)}' "$THERMAL_PATH/thermal_zone0/temp" 2>"/dev/null")"
+	;;
+esac
+
+# PON(光模块)温度：AN758X 专用，优先 json + jsonfilter，回落文本解析
+case "$DISTRIB_TARGET" in
+airoha/*)
+	ponctl="$(command -v ponctl 2>/dev/null)"
+	[ -n "$ponctl" ] || { [ -x "/usr/sbin/ponctl" ] && ponctl="/usr/sbin/ponctl"; }
+	if [ -n "$ponctl" ]; then
+		_dev="$(uci -q get pon.@xpon[0].device 2>/dev/null)"
+		_arg=""
+		[ -n "$_dev" ] && _arg="--device $_dev"
+		_json="$("$ponctl" $_arg status --json 2>/dev/null)"
+		if [ -n "$_json" ] && command -v jsonfilter >/dev/null 2>&1; then
+			pon_temp="$(printf '%s' "$_json" | jsonfilter -q -e '@.frontend.temperature_celsius' 2>/dev/null | awk 'NF {printf("%.1f°C", $1)}')"
+		else
+			pon_temp="$("$ponctl" $_arg status 2>/dev/null | awk '/temperature_celsius/ {sub(/^.*temperature_celsius[^0-9-]*/, ""); sub(/[^0-9.-].*$/, ""); if (length) printf("%.1f°C", $0); exit}')"
+		fi
+	fi
+	;;
+esac
+# 输出顺序：CPU, PON, WiFi
+out=""
+[ -n "$cpu_temp" ] && out="CPU: $cpu_temp"
+[ -n "$pon_temp" ] && out="${out:+$out, }PON: $pon_temp"
+[ -n "$wifi_temp" ] && out="${out:+$out, }WiFi: $wifi_temp"
+echo -n "${out:-No temperature info}"

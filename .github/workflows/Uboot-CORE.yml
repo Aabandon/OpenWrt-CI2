@@ -1,0 +1,204 @@
+name: Uboot-CORE
+
+on:
+  workflow_call:
+    inputs:
+      UBOOT_TARGET:
+        required: true
+        type: string
+        description: '平台标识（Release tag / 产物前缀）'
+      UBOOT_URL:
+        required: true
+        type: string
+        description: '源码仓库地址'
+      UBOOT_BRANCH:
+        required: true
+        type: string
+        description: '源码分支'
+      UBOOT_SCRIPT:
+        required: true
+        type: string
+        description: '源码内构建脚本（接一个机型名参数）'
+      UBOOT_BOARDS_FILE:
+        required: true
+        type: string
+        description: '机型名单 txt（本仓库内路径，一行一个机型）'
+    secrets:
+      AIROHA_SIGN_KEY:
+        required: false
+        description: 'AN758X 签名私钥（RSA-4096 PEM），不配则跳过签名'
+
+env:
+  TZ: Asia/Shanghai
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  UBOOT_DIR: ${{ github.workspace }}/uboot
+  UBOOT_TARGET: ${{ inputs.UBOOT_TARGET }}
+  UBOOT_URL: ${{ inputs.UBOOT_URL }}
+  UBOOT_BRANCH: ${{ inputs.UBOOT_BRANCH }}
+  UBOOT_SCRIPT: ${{ inputs.UBOOT_SCRIPT }}
+  UBOOT_BOARDS_FILE: ${{ inputs.UBOOT_BOARDS_FILE }}
+
+jobs:
+  uboot_core:
+    name: Build ${{ inputs.UBOOT_TARGET }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    steps:
+      # =======================================================================
+      # 1. 拉取 CI 仓库（机型名单 txt）
+      # =======================================================================
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # =======================================================================
+      # 2. 读取机型名单，写入环境变量
+      # =======================================================================
+      - name: Read Boards List
+        run: |
+          file="$GITHUB_WORKSPACE/$UBOOT_BOARDS_FILE"
+          [ -f "$file" ] || { echo "::error::机型名单不存在: $file"; exit 1; }
+          boards="$(grep -vE '^[[:space:]]*(#|$)' "$file" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+          [ -n "$boards" ] || { echo "::error::机型名单为空: $file"; exit 1; }
+          echo "UBOOT_BOARDS=$boards" >> "$GITHUB_ENV"
+          echo "机型（$(echo $boards | wc -w) 个）: $boards"
+
+      # =======================================================================
+      # 3. 安装依赖（两平台依赖取并集，一次装齐，core 不按平台分支）
+      # =======================================================================
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential ca-certificates ccache curl \
+            device-tree-compiler flex gcc-aarch64-linux-gnu gcc-arm-none-eabi \
+            gzip libc6-dev-arm64-cross libncurses-dev libssl-dev openssl \
+            pkg-config python3 python3-cryptography python3-jsonschema \
+            python3-pyelftools python3-setuptools python3-yaml swig \
+            u-boot-tools uuid-dev xz-utils
+
+      # =======================================================================
+      # 4. 下载 Mbed TLS（AN758X 签名用，另一平台忽略）
+      # =======================================================================
+      - name: Mbed TLS (for AN758X signing)
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          curl -fsSL https://github.com/Mbed-TLS/mbedtls/archive/refs/tags/v3.4.1.tar.gz | tar -xz
+          echo "MBEDTLS_DIR=$GITHUB_WORKSPACE/mbedtls-3.4.1" >> "$GITHUB_ENV"
+
+      # =======================================================================
+      # 5. 克隆源码，采集提交信息供 Release 使用
+      # =======================================================================
+      - name: Clone U-Boot Code
+        run: |
+          git clone --depth=1 --single-branch --branch "$UBOOT_BRANCH" "$UBOOT_URL" "$UBOOT_DIR"
+          cd "$UBOOT_DIR"
+
+          # 发布用的「提交」取自源码仓库（UBOOT_URL），不是本 CI 仓库
+          COMMIT_FULL="$(git rev-parse HEAD)"
+          COMMIT_SHORT="$(git rev-parse --short HEAD)"
+          COMMIT_MSG="$(git log -1 --pretty=%s)"
+          # 源码提交的可点击链接（去掉 URL 末尾的 .git）
+          COMMIT_URL="${UBOOT_URL%.git}/commit/${COMMIT_FULL}"
+
+          {
+            echo "UBOOT_COMMIT=$COMMIT_SHORT"
+            echo "UBOOT_COMMIT_MSG=$COMMIT_MSG"
+            echo "UBOOT_COMMIT_URL=$COMMIT_URL"
+            echo "UBOOT_DATE=$(date +'%y.%m.%d_%H.%M')"
+          } >> "$GITHUB_ENV"
+
+          git log -1 --format='源码提交: %h %s'
+          echo "源码提交链接: $COMMIT_URL"
+
+      # =======================================================================
+      # 6. 逐个机型构建（单个失败只记 warning，继续编其余机型）
+      # =======================================================================
+      - name: Build All Boards
+        env:
+          CROSS_COMPILE: aarch64-linux-gnu-
+          ARM32_CROSS_COMPILE: arm-none-eabi-
+          BUILD_JOBS: 4
+          AIROHA_SIGN_KEY: ${{ secrets.AIROHA_SIGN_KEY }}
+        run: |
+          cd "$UBOOT_DIR"
+          failed=""
+          for board in $UBOOT_BOARDS; do
+            echo "===== $board ====="
+            if sh "./$UBOOT_SCRIPT" "$board"; then
+              echo "OK: $board"
+            else
+              echo "::warning::编译失败: $board"
+              failed="$failed $board"
+            fi
+          done
+          echo "FAILED_BOARDS=$failed" >> "$GITHUB_ENV"
+          [ -z "$failed" ] || echo "::error::以下机型编译失败:$failed"
+
+      # =======================================================================
+      # 7. 整理产物（平铺最终文件 + sha256sums）
+      # =======================================================================
+      - name: Package Artifacts
+        run: |
+          UPLOAD="$GITHUB_WORKSPACE/upload"
+          rm -rf "$UPLOAD" && mkdir -p "$UPLOAD"
+          cd "$UBOOT_DIR"
+          # 文件名自带机型前缀，平铺不会互相覆盖；只取最终产物，跳过 u-boot/bl2 等中间文件
+          for board in $UBOOT_BOARDS; do
+            [ -d "output/$board" ] || continue
+            for f in "output/$board/"*; do
+              [ -f "$f" ] || continue
+              case "${f##*/}" in
+                *.boot.bin|*.fip.bin|*.manifest.json|*-preloader.bin|*-bl31-u-boot.fip|*-firstblock.bin)
+                  cp -f "$f" "$UPLOAD/"
+                  ;;
+              esac
+            done
+          done
+          (cd "$UPLOAD" && sha256sum * > sha256sums.txt)
+          ls -lh "$UPLOAD"
+
+      # =======================================================================
+      # 8. 上传 Artifact（临时保留，方便下载全量产物）
+      # =======================================================================
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.UBOOT_TARGET }}
+          path: upload/*
+          if-no-files-found: error
+
+      # =======================================================================
+      # 9. 发布 Release
+      # =======================================================================
+      - name: Release Firmware
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ inputs.UBOOT_TARGET }}_${{ env.UBOOT_DATE }}
+          name: ${{ inputs.UBOOT_TARGET }} · ${{ env.UBOOT_DATE }}
+          files: upload/*
+          fail_on_unmatched_files: false
+          body: |
+            | 项目 | 详情 |
+            | --- | --- |
+            | 源码 | [${{ env.UBOOT_TARGET }}（${{ env.UBOOT_BRANCH }}）](${{ env.UBOOT_URL }}) |
+            | 提交 | [`${{ env.UBOOT_COMMIT }}`](${{ env.UBOOT_COMMIT_URL }}) — ${{ env.UBOOT_COMMIT_MSG }} |
+            | 机型 | ${{ env.UBOOT_BOARDS }} |
+            | 失败 | ${{ env.FAILED_BOARDS == '' && '无' || env.FAILED_BOARDS }} |
+            | 时间 | ${{ env.UBOOT_DATE }}（Asia/Shanghai） |
+
+            > 发布信息中的「提交」来自源码仓库 `${{ env.UBOOT_URL }}`，非本 CI 仓库。
+            > 刷机前请确认机型与分区，谨慎操作。
+
+      # =======================================================================
+      # 10. 清理旧 Release / tags / 工作流运行记录（各只保留最近 6 次）
+      # =======================================================================
+      - name: Delete releases and workflows runs
+        uses: ophub/delete-releases-workflows@main
+        with:
+          delete_releases: true
+          releases_keep_latest: 6
+          delete_tags: true
+          delete_workflows: true
+          workflows_keep_day: 2
+          gh_token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,30 @@
+name: uboot-rtl9617c-lyq1996
+
+on:
+  workflow_dispatch:
+
+#同一平台同时只跑一个构建
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+#CI权限：发布 Release、清理旧运行记录需要写权限
+permissions:
+  contents: write
+  actions: write
+
+#CI任务
+jobs:
+  uboot_config:
+    #调用公用编译核心 Uboot-CORE.yml
+    uses: ./.github/workflows/Uboot-CORE.yml
+    secrets: inherit
+    with:
+      #平台标识（Release tag / 产物前缀）
+      UBOOT_TARGET: uboot-rtl9617c-lyq1996
+      UBOOT_URL: https://github.com/lyq1996/rtl9617c-uboot.git
+      UBOOT_BRANCH: main
+      #构建脚本（源码内路径）
+      UBOOT_SCRIPT: build.sh
+      #机型名单（每次读取 txt，自动同步上游新机型）
+      UBOOT_BOARDS_FILE: Config/uboot-rtl9617c-boards.txt
