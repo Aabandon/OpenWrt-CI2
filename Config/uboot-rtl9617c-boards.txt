@@ -1,0 +1,7 @@
+# 自动生成：Update-Uboot-Boards.yml（来源 lyq1996/rtl9617c-uboot 的 tools/release/boards/）
+tianyi-tyfza1-2p5g
+tianyi-tyfza1-4ge
+youhua-pt1500-h10-ct-2p5g
+youhua-pt1570-h10-ct-2p5g
+youhua-pt1570-h10-cu-2p5g
+youhua-pt1570-r10-cu-4ge

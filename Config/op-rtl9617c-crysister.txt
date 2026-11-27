@@ -1,0 +1,77 @@
+#RTL9617C
+# ============================================================
+# op-rtl9617c-crysister —— crysister/rtl9617c-immortalwrt（master 分支）
+#
+# 这个源码没有 configs/*.config，所以本文件就是完整的目标配置，
+# 不写 #!DEFCONFIG=，直接由核心生成 .config 后 make defconfig。
+# 与 AN758X 平台共用同一个 OpenWrt-CORE.yml / Scripts，
+# 差异全部限制在本文件里。
+# ============================================================
+
+# ---------------- 目标平台 ----------------
+CONFIG_TARGET_rtl9617c=y
+CONFIG_TARGET_rtl9617c_generic=y
+# 供 Plugins.sh 在 feeds install 前判断架构（OpenClash 内核预置用）
+CONFIG_TARGET_BOARD="rtl9617c"
+CONFIG_TARGET_SUBTARGET="generic"
+CONFIG_TARGET_ARCH_PACKAGES="aarch64_cortex-a53"
+
+# ---------------- 机型：多台都编译 ----------------
+CONFIG_TARGET_MULTI_PROFILE=y
+CONFIG_TARGET_PER_DEVICE_ROOTFS=y
+# Youhua PT1500-H10 / Tianyi TYFZA1（都是 2.5G 网口版本）
+CONFIG_TARGET_DEVICE_rtl9617c_generic_DEVICE_youhua_pt1500_h10_2p5g=y
+CONFIG_TARGET_DEVICE_rtl9617c_generic_DEVICE_tianyi_tyfza1_2p5g=y
+
+# ---------------- LuCI / 主题 ----------------
+CONFIG_PACKAGE_luci=y
+CONFIG_PACKAGE_luci-theme-argon=y
+CONFIG_PACKAGE_luci-app-argon-config=y
+CONFIG_PACKAGE_luci-theme-aurora=y
+CONFIG_PACKAGE_luci-app-aurora-config=y
+CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
+CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y
+CONFIG_PACKAGE_luci-app-firewall=y
+CONFIG_PACKAGE_luci-app-package-manager=y
+CONFIG_PACKAGE_luci-i18n-package-manager-zh-cn=y
+CONFIG_PACKAGE_luci-proto-ipv6=y
+CONFIG_PACKAGE_luci-proto-ppp=y
+CONFIG_LUCI_LANG_zh_Hans=y
+CONFIG_PACKAGE_fitblk=y
+CONFIG_PACKAGE_uhttpd=y
+CONFIG_PACKAGE_uhttpd-mod-ubus=y
+CONFIG_PACKAGE_ca-certificates=y
+CONFIG_PACKAGE_zlib=y
+CONFIG_PACKAGE_ucode-mod-math=y
+CONFIG_PACKAGE_zoneinfo-core=y
+CONFIG_PACKAGE_zoneinfo-asia=y
+
+# ---------------- RTL9617C 专属（源码 feeds.conf.default 已带 rtl9617c feed）----------------
+# 这两项 DEVICE_PACKAGES 已自动选中，这里显式写出，防止上游调整设备包后漏掉
+CONFIG_PACKAGE_rtl9617c-pon-control=y
+CONFIG_PACKAGE_luci-app-rtl9617c-pon=y
+CONFIG_PACKAGE_luci-app-rtl9617c-qos=y
+CONFIG_PACKAGE_luci-app-rtl9617c-pe=y
+# CONFIG_PACKAGE_rtl9617c-pe-offload=y
+
+# ---------------- 通用插件----------------；
+# 是否编译由本文件的 =y 决定。
+CONFIG_PACKAGE_coremark=y
+CONFIG_PACKAGE_kmod-mtd-rw=y
+CONFIG_PACKAGE_luci-app-upnp=y
+CONFIG_PACKAGE_luci-i18n-upnp-zh-cn=y
+CONFIG_PACKAGE_luci-app-diskman=y
+CONFIG_PACKAGE_luci-app-vlmcsd=y
+CONFIG_PACKAGE_luci-app-ttyd=y
+CONFIG_PACKAGE_luci-app-ramfree=y
+CONFIG_PACKAGE_luci-app-ddns-go=y
+CONFIG_PACKAGE_luci-app-lucky=y
+CONFIG_PACKAGE_luci-app-wol=y
+CONFIG_PACKAGE_python3=y
+CONFIG_PACKAGE_python3-requests=y
+CONFIG_PACKAGE_curl=y
+CONFIG_PACKAGE_ca-bundle=y
+CONFIG_PACKAGE_gzip=y
+CONFIG_PACKAGE_luci-app-samba4=y
+CONFIG_PACKAGE_luci-app-rtp2httpd=y
+CONFIG_PACKAGE_luci-app-gecoosac=y
