@@ -1,0 +1,68 @@
+#AN7581
+# ============================================================
+# op-an758x-pbs05 —— pbs05/ponwrt（Airoha AN758X PON 光猫）
+#
+# 一台设备只需这一个文件，分三部分：
+#   1. 首行 # 之后  = 发布说明里的"设备"字段
+#   2. #!DEFCONFIG= = 先加载源码自带的完整配置
+#   3. 其余内容     = 追加到 .config 末尾（后写覆盖先写）
+# 换平台只改 #!DEFCONFIG=，例如 configs/an7583.config
+# ============================================================
+#!DEFCONFIG=configs/an7581.config
+
+# 供脚本判断平台
+CONFIG_TARGET_airoha=y
+CONFIG_TARGET_BOARD="airoha"
+
+# ---------------- 机型：源码默认全开，这里用 =n 逐个关掉（后写覆盖先写）----------------
+CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5382a=n
+CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5585f-ct-usb-sfp=n
+CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5585f-cu=n
+CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5585f-cu-usb-sfp=n
+CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_gemtek_xg2010g=n
+CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_nokia_xg-040g-md-ubi-usb-sfp=n
+CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_nokia_xg-040g-tf-ubi=n
+CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_znxt_zn515xg-d=n
+
+# ---------------- 关掉源码配置里残留的 passwall 组件 ----------------
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Haproxy=n
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Shadowsocks_Rust_Client=n
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Shadowsocks_Rust_Server=n
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Simple_Obfs=n
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_SingBox=n
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Geoview=n
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin=n
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=n
+
+# ---------------- airoha相关插件 ----------------
+CONFIG_PACKAGE_luci-app-airoha-fancontrol=y
+CONFIG_PACKAGE_luci-app-airoha-npu=y
+CONFIG_PACKAGE_luci-app-natmode=y
+CONFIG_PACKAGE_luci-app-pon-status=y
+CONFIG_PACKAGE_luci-app-iptv=y
+
+# ---------------- 主题 ----------------
+CONFIG_PACKAGE_luci-theme-argon=y
+CONFIG_PACKAGE_luci-app-argon-config=y
+CONFIG_PACKAGE_luci-theme-aurora=y
+CONFIG_PACKAGE_luci-app-aurora-config=y
+
+# ---------------- 常用插件 ----------------
+CONFIG_PACKAGE_coremark=y
+CONFIG_PACKAGE_kmod-mtd-rw=y
+CONFIG_PACKAGE_luci-app-upnp=y
+CONFIG_PACKAGE_luci-app-diskman=y
+CONFIG_PACKAGE_luci-app-vlmcsd=y
+CONFIG_PACKAGE_luci-app-ttyd=y
+CONFIG_PACKAGE_luci-app-ramfree=y
+CONFIG_PACKAGE_luci-app-ddns-go=y
+CONFIG_PACKAGE_luci-app-lucky=y
+CONFIG_PACKAGE_luci-app-wol=y
+CONFIG_PACKAGE_python3=y
+CONFIG_PACKAGE_python3-requests=y
+CONFIG_PACKAGE_curl=y
+CONFIG_PACKAGE_ca-bundle=y
+CONFIG_PACKAGE_gzip=y
+CONFIG_PACKAGE_luci-app-samba4=y
+CONFIG_PACKAGE_luci-app-rtp2httpd=y
+CONFIG_PACKAGE_luci-app-gecoosac=y

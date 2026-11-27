@@ -1,0 +1,14 @@
+# 自动生成：Update-Uboot-Boards.yml（来源 pbs05/uboot-an758x 的 build-an758x.sh）
+an4475-g2
+hg5382a
+hg5585f-ct
+hg5585f-cu
+hm2004-du
+ung00a
+xg-040g-md
+xg-040g-mf
+xg-040g-tf
+xg2010g
+xr1710g
+zn504xg-d
+zn515xg-d
