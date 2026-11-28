@@ -1,0 +1,52 @@
+name: op-rtl9617c-crysister
+
+on:
+  #定时：每周日 18:00 UTC（取消注释启用）；否则手动
+  #schedule:
+  #  - cron: 0 18 * * Sun
+  workflow_dispatch:
+    inputs:
+      OPENCLASH:
+        description: '编译 luci-app-openclash（默认关闭）'
+        required: false
+        default: false
+        type: boolean
+      NIKKI:
+        description: '编译 luci-app-nikki（默认关闭）'
+        required: false
+        default: false
+        type: boolean
+
+#同一设备同时只跑一个构建，避免并发写同一份工具链缓存
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+#CI权限：发布 Release、清理旧运行记录需要写权限
+permissions:
+  contents: write
+  actions: write
+
+#CI任务
+jobs:
+  openwrt_config:
+    #调用公用编译核心 OpenWrt-CORE.yml，核心逻辑与 AN758X 平台共用
+    uses: ./.github/workflows/OpenWrt-CORE.yml
+    with:
+      #平台（Config/op-rtl9617c-crysister.txt）
+      OpenWrt_TARGET: op-rtl9617c-crysister
+      OpenWrt_THEME: argon
+      OpenWrt_NAME: ImmortalWrt
+      OpenWrt_PW: 无
+      OpenWrt_IP: 192.168.1.1
+      OpenWrt_URL: https://github.com/crysister/rtl9617c-immortalwrt.git
+      OpenWrt_BRANCH: master
+
+      # ---------- 选填，不写用核心默认值 ----------
+      #自定义配置 Config/op-rtl9617c-crysister.txt
+      #OpenWrt_CONFIG: Config/op-rtl9617c-crysister.txt
+      #'false' 强制重编工具链
+      #OpenWrt_CACHE: 'true'
+      #OpenClash / Nikki 由运行时勾选决定，默认关闭
+      OpenWrt_OPENCLASH: ${{ inputs.OPENCLASH }}
+      OpenWrt_NIKKI: ${{ inputs.NIKKI }}
